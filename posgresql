@@ -1,0 +1,43 @@
+-- 1. Create an empty table  
+create table buslines (route text, run int, sequence int, stop_code_lbsl text, bus_stop_code text, naptan_atco text, stop_name text, easting real, northing real, heading int, virtual_bus_stop int); 
+
+-- 2. Import tfl bus-sequences.csv to the table. Remove header before import.
+COPY buslines FROM '/users/Agata/Desktop/bus-sequences.csv' DELIMITER ',' CSV;
+
+-- 3. Linestring geometry from an array of geometries for each "route and run"
+create or replace function geom_from_array(routes text, runs int) returns text as $$
+begin
+return (select ST_AsText(ST_MakeLine(array(select ST_Transform(ST_SetSRID(ST_MakePoint(northing, easting), 27700), 4326) from buslines where route = routes and run = runs))));
+end;
+$$
+language plpgsql;
+
+-- 4. Function that inserts buslines data into 'rdf_buslines' table
+create or replace function batch_buslines() returns table(route text, run int, geom text) as $$
+declare
+route_set text []:= array(select distinct b.route from buslines b order by b.route); 
+i text;
+run_case int [] := array(select distinct b.run from buslines b order by b.run);
+j int;
+begin
+execute 
+'drop table if exists rdf_buslines;
+create table rdf_buslines (route text, run int, geom text);';
+foreach j in array run_case loop
+foreach i in array route_set loop
+if (geom_from_array(i,j) is null) then
+insert into rdf_buslines values(i, j, null);
+else insert into rdf_buslines values(i, j, geom_from_array(i,j));
+end if;
+end loop;
+end loop;
+delete from rdf_buslines where rdf_buslines.geom is null;
+return query select * from rdf_buslines order by route, run ASC;
+end;
+$$
+language plpgsql;
+
+-- 5. Run. Results in rdf_buslines table or either:
+select * from batch_buslines(); 
+select * into test from batch_buslines();
+copy (select * from rdf_buslines order by route, run ASC) to '/users/Agata/Desktop/buslines.csv' delimiter ',' CSV HEADER
