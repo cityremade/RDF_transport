@@ -7,7 +7,7 @@ COPY buslines FROM '/users/Agata/Desktop/bus-sequences.csv' DELIMITER ',' CSV;
 -- 3. Linestring geometry from an array of geometries for each "route and run"
 create or replace function geom_from_array(routes text, runs int) returns text as $$
 begin
-return (select ST_AsText(ST_MakeLine(array(select ST_Transform(ST_SetSRID(ST_MakePoint(northing, easting), 27700), 4326) from buslines where route = routes and run = runs))));
+return (select ST_AsText(ST_MakeLine(array(select ST_Transform(ST_SetSRID(ST_MakePoint(easting, northing), 27700), 4326) from buslines where route = routes and run = runs))));
 end;
 $$
 language plpgsql;
@@ -22,7 +22,7 @@ j int;
 begin
 execute 
 'drop table if exists rdf_buslines;
-create table rdf_buslines (route text, run int, geom text);';
+create temp table rdf_buslines (route text, run int, geom text);';
 foreach j in array run_case loop
 foreach i in array route_set loop
 if (geom_from_array(i,j) is null) then
@@ -39,5 +39,43 @@ language plpgsql;
 
 -- 5. Run. Results in rdf_buslines table or either:
 select * from batch_buslines(); 
-select * into test from batch_buslines();
-copy (select * from rdf_buslines order by route, run ASC) to '/users/Agata/Desktop/buslines.csv' delimiter ',' CSV HEADER
+select * into temp test from batch_buslines();
+copy (select * from rdf_buslines order by route, run ASC) to '/users/Agata/Desktop/buslines_geo.csv' delimiter ',' CSV HEADER
+select * from rdf_buslines limit 10
+
+-- 6. Joining labels
+
+drop table if exists ods; 
+drop table if exists labels;
+drop table if exists busline_content;
+select route, run, 1 as start, count(*) as stop into temp labels from buslines group by route, run order by route, run ASC;
+select ori.route, ori.run, ori.start, ori.stop, origin, stop_name as destination
+into temp ods
+from
+( select l.route, l.run, l.start, l.stop, stop_name as origin
+from labels l 
+left join buslines on 
+( l.route=buslines.route and l.run=buslines.run and l.start=buslines.sequence )
+order by route, run ASC ) as ori 
+left join buslines on
+( ori.route=buslines.route and ori.run=buslines.run and ori.stop=buslines.sequence );
+
+alter table ods add label text
+update ods set label= origin ||' - '|| destination
+
+select * into busline_content from 
+(
+select r.route, r.run, ods.label, r.geom from ods
+join rdf_buslines r on ods.route = r.route and ods.run = r.run
+order by route, run ASC
+) as rdf_data 
+;
+
+select * from busline_content limit 100 
+
+copy (select * from busline_content order by route, run ASC) to '/users/Agata/Desktop/busline_content.csv' delimiter ',' CSV HEADER
+
+
+
+
+
