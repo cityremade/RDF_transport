@@ -1,0 +1,11 @@
+drop table if exists tube_stations;
+
+-- 1. Save kml from TfL to csv in eg. QGis and leave first 4 columns only as the following table. Remove header and unnecessary spaces in the name column.
+-- 2. Create empty table.
+create table tube_stations (x real, y real, name text, description text);
+-- 3. Import the csv
+copy tube_stations from '/Users/Agata/Desktop/London files/tube_stations.csv' delimiter ',' csv;
+-- 4. See if alright
+select *, ST_AsText(ST_setSRID(St_MakePoint(x, y), 4326)) as wktgeom from tube_stations limit 20
+-- 5. Export to csv
+ copy (select *, ST_AsText(ST_setSRID(St_MakePoint(x, y), 4326)) as wktgeom from tube_stations) to '/Users/Agata/Desktop/tube_stations_rdf_ready.csv' delimiter ',' csv header
