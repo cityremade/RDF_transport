@@ -1,0 +1,7 @@
+--- this creates a bus stop correspondence table
+-- 3 reliable identifiers of the bus stop + made up service by concatenation (?) as a bus line may have more than one route 
+
+select stop_code_lbsl, bus_stop_code, naptan_atco, route, run, sequence, concat(route, '_', run) as service
+from buslines 
+
+limit 100
