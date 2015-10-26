@@ -1,0 +1,15 @@
+-- To import the shapefile to the database 
+-- make sure shp2pgsql is in place
+-- here come the shp http://data.london.gov.uk/dataset/statistical-gis-boundary-files-london 
+
+-- Syntax to run in the system console
+-- shp2pgsql -I -s 27700 /Users/Agata/Downloads/statistical-gis-boundaries-london/ESRI/London_Borough_Excluding_MHW.shp boroughs | psql -d buses_spatial -U postgres 
+-- shp2pgsql -I -s SRID path-to-shp table_name | psql -d dbname -U username
+
+select * from boroughs
+
+select gid, name, gss_code, ST_Transform(geom, 4326) from boroughs
+
+select name, gss_code as code, ST_AsText(ST_Transform(geom, 4326)) from boroughs order by code
+
+copy (select name, gss_code as code, ST_AsText(ST_Transform(geom, 4326)) from boroughs order by code) to '/Users/Agata/Desktop/boroughs.csv' delimiter ',' csv header
